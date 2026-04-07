@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LibraryOS — Inventaris Buku</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Serif+Display&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:       #0f0e0c;
+    --paper:     #f5f0e8;
+    --cream:     #ede8dc;
+    --accent:    #c94f1e;
+    --accent2:   #2d6a4f;
+    --muted:     #8a857a;
+    --border:    #d4cfc4;
+    --card:      #faf7f2;
+    --mono:      'Space Mono', monospace;
+    --serif:     'DM Serif Display', serif;
+    --sans:      'Syne', sans-serif;
+    --radius:    10px;
+    --shadow:    0 2px 12px rgba(15,14,12,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── NOISE TEXTURE overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 9999;
+    opacity: 0.4;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 36px;
+    border-bottom: 1.5px solid var(--border);
+    background: var(--card);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo {
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .logo-mark {
+    font-family: var(--serif);
+    font-size: 26px;
+    color: var(--ink);
+    letter-spacing: -0.5px;
+  }
+  .logo-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+  .header-stats {
+    display: flex; gap: 24px;
+  }
+  .stat {
+    text-align: right;
+  }
+  .stat-num {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink);
+    display: block;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* ── LAYOUT ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 0;
+    min-height: calc(100vh - 73px);
+  }
+
+  /* ── LEFT PANEL ── */
+  .main-panel {
+    padding: 32px 36px;
+    border-right: 1.5px solid var(--border);
+  }
+
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .section-title {
+    font-family: var(--serif);
+    font-size: 22px;
+    color: var(--ink);
+  }
+
+  /* ── SEARCH ── */
+  .search-wrap {
+    position: relative;
+    margin-bottom: 24px;
+  }
+  .search-icon {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); font-size: 14px; pointer-events: none;
+  }
+  .search-input {
+    width: 100%;
+    padding: 12px 12px 12px 40px;
+    font-family: var(--sans); font-size: 14px;
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--muted); }
+
+  /* ── BOOK TABLE ── */
+  .table-wrap {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .table-head {
+    display: grid;
+    grid-template-columns: 60px 1fr 180px 90px 90px;
+    padding: 10px 20px;
+    background: var(--cream);
+    border-bottom: 1.5px solid var(--border);
+  }
+  .th {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .book-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 180px 90px 90px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    transition: background 0.15s;
+    cursor: pointer;
+    animation: rowIn 0.3s ease both;
+  }
+  .book-row:last-child { border-bottom: none; }
+  .book-row:hover { background: var(--cream); }
+  .book-row.selected { background: #fef3ee; border-left: 3px solid var(--accent); }
+
+  @keyframes rowIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .book-id {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .book-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .book-author {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .stok-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--mono);
+    font-size: 13px; font-weight: 700;
+    width: 36px; height: 28px;
+    border-radius: 6px;
+    transition: all 0.3s;
+  }
+  .stok-ok    { background: #e8f5ef; color: var(--accent2); }
+  .stok-low   { background: #fff4e8; color: #c47a1a; }
+  .stok-empty { background: #fdecea; color: #c0392b; }
+
+  .action-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--sans); font-size: 12px; font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 6px; border: 1.5px solid var(--border);
+    background: transparent; color: var(--ink);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .action-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .empty-state {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  /* ── POINTER BADGE ── */
+  .ptr-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: #f0eaf8;
+    color: #6c3fc5;
+    border: 1px solid #d5c5f0;
+    padding: 2px 7px; border-radius: 4px;
+    letter-spacing: 0.04em;
+  }
+  .ptr-badge.green {
+    background: #e8f5ef; color: var(--accent2); border-color: #b8ddc9;
+  }
+  .ptr-badge.orange {
+    background: #fff4e8; color: #c47a1a; border-color: #f5d49a;
+  }
+
+  /* ── RIGHT PANEL ── */
+  .side-panel {
+    padding: 32px 28px;
+    background: var(--card);
+    display: flex; flex-direction: column; gap: 28px;
+  }
+
+  .panel-block { }
+  .panel-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-label::after {
+    content: '';
+    flex: 1; height: 1px;
+    background: var(--border);
+  }
+
+  /* Form */
+  .form-group { margin-bottom: 14px; }
+  .form-label {
+    display: block;
+    font-size: 12px; font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 5px;
+    letter-spacing: 0.04em;
+  }
+  .form-input, .form-select {
+    width: 100%;
+    padding: 9px 12px;
+    font-family: var(--sans); font-size: 13px;
+    background: var(--paper);
+    border: 1.5px solid var(--border);
+    border-radius: 7px; color: var(--ink);
+    outline: none; transition: border-color 0.2s;
+  }
+  .form-input:focus, .form-select:focus { border-color: var(--accent); }
+
+  .btn-primary {
+    width: 100%;
+    padding: 11px;
+    font-family: var(--sans); font-size: 13px; font-weight: 700;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 7px;
+    cursor: pointer; transition: all 0.2s;
+    letter-spacing: 0.03em;
+  }
+  .btn-primary:hover { background: #a83e16; transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); }
+
+  /* Detail card */
+  .detail-card {
+    background: var(--paper);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    transition: all 0.25s;
+  }
+  .detail-card.empty {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100px;
+    border-style: dashed;
+  }
+  .detail-title {
+    font-family: var(--serif);
+    font-size: 17px; margin-bottom: 4px;
+  }
+  .detail-author {
+    font-size: 12px; color: var(--muted); margin-bottom: 14px;
+  }
+  .detail-row {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px; padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-key { color: var(--muted); font-size: 12px; }
+
+  /* Stok update */
+  .stok-controls {
+    display: flex; gap: 8px; align-items: center;
+    margin-top: 12px;
+  }
+  .stok-controls input {
+    flex: 1;
+    padding: 8px 10px;
+    font-family: var(--mono); font-size: 14px; font-weight: 700;
+    border: 1.5px solid var(--border); border-radius: 7px;
+    background: var(--paper); color: var(--ink);
+    text-align: center; outline: none;
+    transition: border-color 0.2s;
+  }
+  .stok-controls input:focus { border-color: var(--accent); }
+  .btn-sm {
+    padding: 8px 13px;
+    font-family: var(--sans); font-size: 12px; font-weight: 700;
+    background: var(--accent2); color: #fff;
+    border: none; border-radius: 7px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-sm:hover { background: #235a40; }
+  .btn-danger {
+    padding: 8px 13px;
+    font-family: var(--sans); font-size: 12px; font-weight: 700;
+    background: transparent; color: #c0392b;
+    border: 1.5px solid #f5c6c0; border-radius: 7px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-danger:hover { background: #fdecea; }
+  .edit-stk{
+    width: 100%;
+  }
+
+  /* Pointer log */
+  .log-wrap {
+    background: #0f0e0c;
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    max-height: 180px;
+    overflow-y: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.7;
+  }
+  .log-wrap::-webkit-scrollbar { width: 4px; }
+  .log-wrap::-webkit-scrollbar-track { background: transparent; }
+  .log-wrap::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+  .log-entry { display: block; animation: logIn 0.2s ease both; }
+  @keyframes logIn { from { opacity:0; } to { opacity:1; } }
+  .log-ptr   { color: #c084fc; }
+  .log-addr  { color: #5eead4; }
+  .log-val   { color: #fbbf24; }
+  .log-op    { color: #6ee7b7; }
+  .log-info  { color: #94a3b8; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--ink); color: #fff;
+    font-family: var(--mono); font-size: 12px;
+    padding: 10px 20px; border-radius: 8px;
+    opacity: 0; transition: all 0.3s; pointer-events: none;
+    z-index: 9998;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .divider { height: 1px; background: var(--border); margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <span class="logo-mark">LibraryOS</span>
+    <span class="logo-tag">POINTER-BASED</span>
+  </div>
+  <div class="header-stats">
+    <div class="stat">
+      <span class="stat-num" id="total-buku">0</span>
+      <span class="stat-label">Total Judul</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num" id="total-stok">0</span>
+      <span class="stat-label">Total Stok</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num" id="stok-low-count">0</span>
+      <span class="stat-label">Stok Kritis</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- MAIN TABLE -->
+  <div class="main-panel">
+    <div class="section-header">
+      <span class="section-title">Inventaris Buku</span>
+      <span class="ptr-badge">inventaris[] @ heap</span>
+    </div>
+
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input class="search-input" id="search" type="text" placeholder="Cari judul atau pengarang...">
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-head">
+        <span class="th">ID</span>
+        <span class="th">Judul &amp; Pengarang</span>
+        <span class="th">Pointer Addr</span>
+        <span class="th">Stok</span>
+        <span class="th">Aksi</span>
+      </div>
+      <div id="book-list"></div>
+    </div>
+  </div>
+
+  <!-- SIDE PANEL -->
+  <div class="side-panel">
+
+    <!-- FORM TAMBAH -->
+    <div class="panel-block">
+      <div class="panel-label">Tambah Buku</div>
+      <div class="form-group">
+        <label class="form-label">Judul</label>
+        <input class="form-input" id="f-judul" placeholder="Nama buku...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Pengarang</label>
+        <input class="form-input" id="f-pengarang" placeholder="Nama penulis...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Stok Awal</label>
+        <input class="form-input" id="f-stok" type="number" min="0" placeholder="0" value="5">
+      </div>
+      <button class="btn-primary" onclick="tambahBuku()">+ Tambah ke Inventaris</button>
+    </div>
+
+    <!-- DETAIL BUKU (muncul saat pilih) -->
+    <div class="panel-block">
+      <div class="panel-label">Detail &amp; Edit</div>
+      <div class="detail-card empty" id="detail-card">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">← pilih buku dari tabel</span>
+      </div>
+    </div>
+
+    <!-- POINTER LOG -->
+    <div class="panel-block">
+      <div class="panel-label">Pointer Log</div>
+      <div class="log-wrap" id="ptr-log">
+        <span class="log-entry log-info">// operasi pointer akan muncul di sini</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ============================================================
+//  DATA LAYER — simulasi pointer C++ dalam JavaScript
+//
+//  inventaris = array of objects (mirip Buku inventaris[])
+//  Setiap objek punya .addr (simulasi alamat memori)
+//  selectedPtr = "pointer" ke elemen yang dipilih
+// ============================================================
+
+let inventaris = [];
+let idCounter  = 1;
+let addrBase   = 0x8A00;
+let selectedPtr = null;  // Buku* selectedPtr = nullptr
+
+// Simulasi &variabel → hasilkan alamat hex
+function getAddr(i) {
+  return '0x' + (addrBase + i * 0x40).toString(16).toUpperCase();
+}
+
+function log(html) {
+  const el = document.getElementById('ptr-log');
+  const entry = document.createElement('span');
+  entry.className = 'log-entry';
+  entry.innerHTML = html;
+  el.appendChild(entry);
+  el.scrollTop = el.scrollHeight;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ============================================================
+//  tambahBuku() — setara void tambahBuku(Buku*, int* jumlah)
+// ============================================================
+function tambahBuku() {
+  const judul     = document.getElementById('f-judul').value.trim();
+  const pengarang = document.getElementById('f-pengarang').value.trim();
+  const stok      = parseInt(document.getElementById('f-stok').value) || 0;
+
+  if (!judul || !pengarang) { showToast('Isi judul & pengarang dulu!'); return; }
+
+  const idx = inventaris.length;
+  const buku = { id: idCounter++, judul, pengarang, stok };
+  inventaris.push(buku);
+
+  const addr = getAddr(idx);
+  log(`<span class="log-op">tambahBuku()</span>  <span class="log-info">jumlah = ${idx} → ${idx+1}</span>`);
+  log(`<span class="log-ptr">Buku*</span> inventaris[${idx}] <span class="log-info">allocated at</span> <span class="log-addr">${addr}</span>`);
+  log(`<span class="log-info">  .id=${buku.id}  .stok=${buku.stok}</span>`);
+
+  document.getElementById('f-judul').value = '';
+  document.getElementById('f-pengarang').value = '';
+
+  render();
+  showToast('Buku ditambahkan ✓');
+}
+
+// ============================================================
+//  cariBuku() — Buku* cariBuku(id) → return pointer atau null
+// ============================================================
+function cariBuku(id) {
+  log(`<span class="log-op">cariBuku(id=${id})</span> <span class="log-info">scanning array...</span>`);
+  for (let i = 0; i < inventaris.length; i++) {
+    if (inventaris[i].id === id) {
+      const addr = getAddr(i);
+      log(`<span class="log-info">  found at index ${i} →</span> <span class="log-ptr">return</span> <span class="log-addr">&amp;inventaris[${i}] = ${addr}</span>`);
+      return { ptr: inventaris[i], addr, idx: i };
+    }
+  }
+  log(`<span class="log-ptr">return</span> <span class="log-val">nullptr</span> <span class="log-info">(not found)</span>`);
+  return null;
+}
+
+// ============================================================
+//  updateStok() — void updateStok(Buku* buku, int stokBaru)
+//  buku->stok = stokBaru
+// ============================================================
+function updateStok() {
+  if (!selectedPtr) return;
+  const val = parseInt(document.getElementById('edit-stok').value);
+  if (isNaN(val) || val < 0) { showToast('Stok tidak valid'); return; }
+
+  const old = selectedPtr.ptr.stok;
+  selectedPtr.ptr.stok = val;  // buku->stok = stokBaru
+
+  log(`<span class="log-op">updateStok()</span> <span class="log-ptr">buku-&gt;stok</span> <span class="log-info">@ <span class="log-addr">${selectedPtr.addr}</span></span>`);
+  log(`<span class="log-info">  ${old}</span> <span class="log-op">→</span> <span class="log-val">${val}</span>`);
+
+  render();
+  selectBuku(selectedPtr.ptr.id);
+  showToast('Stok diperbarui ✓');
+}
+
+// ============================================================
+//  hapusBuku() — menggeser array, update pointer
+// ============================================================
+function hapusBuku(id) {
+  const result = cariBuku(id);
+  if (!result) return;
+
+  inventaris.splice(result.idx, 1);
+  log(`<span class="log-op">hapusBuku()</span> <span class="log-info">free pointer</span> <span class="log-addr">${result.addr}</span>`);
+  log(`<span class="log-info">  array shift: alamat di-realokasi</span>`);
+
+  selectedPtr = null;
+  document.getElementById('detail-card').innerHTML = '<span style="font-family:var(--mono);font-size:11px;color:var(--muted)">← pilih buku dari tabel</span>';
+  document.getElementById('detail-card').classList.add('empty');
+
+  render();
+  showToast('Buku dihapus');
+}
+
+// ============================================================
+//  selectBuku() — Buku* selectedPtr = cariBuku(id)
+// ============================================================
+function selectBuku(id) {
+  const result = cariBuku(id);
+  if (!result) return;
+
+  selectedPtr = result;  // selectedPtr = &inventaris[idx]
+
+  log(`<span class="log-ptr">selectedPtr</span> <span class="log-op">=</span> <span class="log-addr">${result.addr}</span> <span class="log-info">(${result.ptr.judul})</span>`);
+
+  const b = result.ptr;
+  const stokClass = b.stok === 0 ? 'stok-empty' : b.stok <= 3 ? 'stok-low' : 'stok-ok';
+
+  document.getElementById('detail-card').classList.remove('empty');
+  document.getElementById('detail-card').innerHTML = `
+    <div class="detail-title">${b.judul}</div>
+    <div class="detail-author">${b.pengarang}</div>
+    <div class="detail-row">
+      <span class="detail-key">ID</span>
+      <span style="font-family:var(--mono);font-size:12px">#${b.id}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-key">Pointer addr</span>
+      <span class="ptr-badge">${result.addr}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-key">Stok saat ini</span>
+      <span class="stok-badge ${stokClass}">${b.stok}</span>
+    </div>
+    <div class="divider" style="margin:12px 0"></div>
+    <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:8px">buku-&gt;stok = ...</div>
+    <div class="stok-controls">
+      <input class="edit-stk" type="number" id="edit-stok" value="${b.stok}" min="0">
+      <button class="btn-sm" onclick="updateStok()">Simpan</button>
+      <button class="btn-danger" onclick="hapusBuku(${b.id})">Hapus</button>
+    </div>
+  `;
+
+  render();
+}
+
+// ============================================================
+//  RENDER
+// ============================================================
+function render() {
+  const query = document.getElementById('search').value.toLowerCase();
+  const list  = document.getElementById('book-list');
+
+  const filtered = inventaris.filter(b =>
+    b.judul.toLowerCase().includes(query) ||
+    b.pengarang.toLowerCase().includes(query)
+  );
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-state">// tidak ada data ditemukan</div>';
+  } else {
+    list.innerHTML = filtered.map((b, _) => {
+      const realIdx = inventaris.indexOf(b);
+      const addr    = getAddr(realIdx);
+      const stokClass = b.stok === 0 ? 'stok-empty' : b.stok <= 3 ? 'stok-low' : 'stok-ok';
+      const isSelected = selectedPtr && selectedPtr.ptr.id === b.id;
+      return `
+        <div class="book-row ${isSelected ? 'selected' : ''}" onclick="selectBuku(${b.id})">
+          <span class="book-id">#${b.id}</span>
+          <div>
+            <div class="book-title">${b.judul}</div>
+            <div class="book-author">${b.pengarang}</div>
+          </div>
+          <span class="ptr-badge ${isSelected ? 'green' : ''}">${addr}</span>
+          <span class="stok-badge ${stokClass}">${b.stok}</span>
+          <button class="action-btn" onclick="event.stopPropagation();selectBuku(${b.id})">Edit</button>
+        </div>`;
+    }).join('');
+  }
+
+  // Update header stats
+  const totalStok = inventaris.reduce((s, b) => s + b.stok, 0);
+  const lowCount  = inventaris.filter(b => b.stok <= 3).length;
+  document.getElementById('total-buku').textContent  = inventaris.length;
+  document.getElementById('total-stok').textContent  = totalStok;
+  document.getElementById('stok-low-count').textContent = lowCount;
+}
+
+// ── SEARCH listener ──
+document.getElementById('search').addEventListener('input', () => {
+  log(`<span class="log-op">cariBuku()</span> <span class="log-info">filter: "${document.getElementById('search').value}"</span>`);
+  render();
+});
+
+// ── SEED DATA ──
+(function seed() {
+  const data = [
+    ['Pemrograman C++',  'Bjarne Stroustrup', 5],
+    ['Clean Code',       'Robert C. Martin',  3],
+    ['The Pragmatic Programmer', 'Andrew Hunt', 7],
+    ['Structure & Interpretation', 'Abelson & Sussman', 2],
+    ['Design Patterns', 'Gang of Four', 1],
+  ];
+  data.forEach(([j, p, s]) => {
+    inventaris.push({ id: idCounter++, judul: j, pengarang: p, stok: s });
+  });
+  log('<span class="log-info">// inventaris[] initialized with seed data</span>');
+  log(`<span class="log-ptr">Buku*</span> <span class="log-info">base addr =</span> <span class="log-addr">0x${addrBase.toString(16).toUpperCase()}</span>`);
+  render();
+})();
+</script>
+</body>
+</html>

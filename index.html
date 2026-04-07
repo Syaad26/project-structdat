@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LibraryOS - Inventaris Buku</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Serif+Display&family=Syne:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="index.css" />
+  </head>
+  <body>
+    <header>
+      <div class="logo">
+        <span class="logo-mark">LibraryOS</span>
+        <span class="logo-tag">POINTER-BASED</span>
+      </div>
+      <div class="header-stats">
+        <div class="stat">
+          <span class="stat-num" id="total-buku">0</span>
+          <span class="stat-label">Total Judul</span>
+        </div>
+        <div class="stat">
+          <span class="stat-num" id="total-stok">0</span>
+          <span class="stat-label">Total Stok</span>
+        </div>
+        <div class="stat">
+          <span class="stat-num" id="stok-low-count">0</span>
+          <span class="stat-label">Stok Kritis</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <div class="main-panel">
+        <div class="section-header">
+          <span class="section-title">Inventaris Buku</span>
+          <span class="ptr-badge" id="base-addr">inventaris[] @ heap</span>
+        </div>
+
+        <div class="search-wrap">
+          <span class="search-icon">⌕</span>
+          <input
+            class="search-input"
+            id="search"
+            type="text"
+            placeholder="Cari judul atau pengarang..."
+          />
+        </div>
+
+        <div class="table-wrap">
+          <div class="table-head">
+            <span class="th">ID</span>
+            <span class="th">Judul &amp; Pengarang</span>
+            <span class="th">Pointer Addr</span>
+            <span class="th">Stok</span>
+            <span class="th">Aksi</span>
+          </div>
+          <div id="book-list"></div>
+        </div>
+      </div>
+
+      <div class="side-panel">
+        <div class="panel-block">
+          <div class="panel-label">Tambah Buku</div>
+          <div class="form-group">
+            <label class="form-label">Judul</label>
+            <input class="form-input" id="f-judul" placeholder="Nama buku..." />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Pengarang</label>
+            <input
+              class="form-input"
+              id="f-pengarang"
+              placeholder="Nama penulis..."
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stok Awal</label>
+            <input
+              class="form-input"
+              id="f-stok"
+              type="number"
+              min="0"
+              placeholder="0"
+              value="5"
+            />
+          </div>
+          <button class="btn-primary" id="btn-add">
+            + Tambah ke Inventaris
+          </button>
+        </div>
+
+        <div class="panel-block">
+          <div class="panel-label">Detail &amp; Edit</div>
+          <div class="detail-card empty" id="detail-card">
+            <span class="detail-placeholder">pilih buku dari tabel</span>
+          </div>
+        </div>
+
+        <div class="panel-block">
+          <div class="panel-label">Pointer Log</div>
+          <div class="log-wrap" id="ptr-log">
+            <span class="log-entry log-info"
+              >// operasi pointer akan muncul di sini</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+      const API_URL = "index.php";
+      let inventaris = [];
+      let selectedId = null;
+
+      function log(html) {
+        const el = document.getElementById("ptr-log");
+        const entry = document.createElement("span");
+        entry.className = "log-entry";
+        entry.innerHTML = html;
+        el.appendChild(entry);
+        el.scrollTop = el.scrollHeight;
+      }
+
+      function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        setTimeout(() => t.classList.remove("show"), 2200);
+      }
+
+      async function apiRequest(action, payload = null) {
+        if (action === "list") {
+          const res = await fetch(`${API_URL}?action=list`);
+          return res.json();
+        }
+
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, ...payload }),
+        });
+
+        return res.json();
+      }
+
+      function applyState(data) {
+        inventaris = data.books ?? [];
+        const stats = data.stats ?? {};
+
+        document.getElementById("total-buku").textContent =
+          stats.total_buku ?? 0;
+        document.getElementById("total-stok").textContent =
+          stats.total_stok ?? 0;
+        document.getElementById("stok-low-count").textContent =
+          stats.stok_kritis ?? 0;
+        document.getElementById("base-addr").textContent =
+          `inventaris[] @ ${stats.base_addr ?? "0x0000"}`;
+
+        render();
+      }
+
+      function render() {
+        const query = document.getElementById("search").value.toLowerCase();
+        const list = document.getElementById("book-list");
+
+        const filtered = inventaris.filter(
+          (b) =>
+            b.judul.toLowerCase().includes(query) ||
+            b.pengarang.toLowerCase().includes(query),
+        );
+
+        if (!filtered.length) {
+          list.innerHTML =
+            '<div class="empty-state">// tidak ada data ditemukan</div>';
+          return;
+        }
+
+        list.innerHTML = filtered
+          .map((b) => {
+            const stokClass =
+              b.stok === 0
+                ? "stok-empty"
+                : b.stok <= 3
+                  ? "stok-low"
+                  : "stok-ok";
+            const isSelected = selectedId === b.id;
+
+            return `
+            <div class="book-row ${isSelected ? "selected" : ""}" data-id="${b.id}">
+              <span class="book-id">#${b.id}</span>
+              <div>
+                <div class="book-title">${b.judul}</div>
+                <div class="book-author">${b.pengarang}</div>
+              </div>
+              <span class="ptr-badge ${isSelected ? "green" : ""}">${b.addr}</span>
+              <span class="stok-badge ${stokClass}">${b.stok}</span>
+              <button class="action-btn" data-edit="${b.id}">Edit</button>
+            </div>`;
+          })
+          .join("");
+      }
+
+      function renderDetail(id) {
+        const target = inventaris.find((b) => b.id === id);
+        const card = document.getElementById("detail-card");
+
+        if (!target) {
+          selectedId = null;
+          card.classList.add("empty");
+          card.innerHTML =
+            '<span class="detail-placeholder">pilih buku dari tabel</span>';
+          render();
+          return;
+        }
+
+        selectedId = id;
+        const stokClass =
+          target.stok === 0
+            ? "stok-empty"
+            : target.stok <= 3
+              ? "stok-low"
+              : "stok-ok";
+        log(
+          `<span class="log-ptr">selectedPtr</span> <span class="log-op">=</span> <span class="log-addr">${target.addr}</span>`,
+        );
+
+        card.classList.remove("empty");
+        card.innerHTML = `
+          <div class="detail-title">${target.judul}</div>
+          <div class="detail-author">${target.pengarang}</div>
+          <div class="detail-row"><span class="detail-key">ID</span><span class="detail-value">#${target.id}</span></div>
+          <div class="detail-row"><span class="detail-key">Pointer addr</span><span class="ptr-badge">${target.addr}</span></div>
+          <div class="detail-row"><span class="detail-key">Stok saat ini</span><span class="stok-badge ${stokClass}">${target.stok}</span></div>
+          <div class="divider detail-gap"></div>
+          <div class="detail-hint">buku-&gt;stok = ...</div>
+          <div class="stok-controls">
+            <input class="edit-stk" type="number" id="edit-stok" value="${target.stok}" min="0" />
+            <button class="btn-sm" id="btn-save-stok">Simpan</button>
+            <button class="btn-danger" id="btn-delete">Hapus</button>
+          </div>
+        `;
+
+        document
+          .getElementById("btn-save-stok")
+          .addEventListener("click", async () => {
+            const newStok = parseInt(
+              document.getElementById("edit-stok").value,
+              10,
+            );
+            if (isNaN(newStok) || newStok < 0) {
+              showToast("Stok tidak valid");
+              return;
+            }
+
+            const result = await apiRequest("update", {
+              id: target.id,
+              stok: newStok,
+            });
+            if (!result.ok) {
+              showToast(result.message || "Update gagal");
+              return;
+            }
+
+            log(
+              `<span class="log-op">updateStok()</span> <span class="log-info">${target.addr} -> ${newStok}</span>`,
+            );
+            applyState(result);
+            renderDetail(target.id);
+            showToast(result.message || "Stok diperbarui");
+          });
+
+        document
+          .getElementById("btn-delete")
+          .addEventListener("click", async () => {
+            const result = await apiRequest("delete", { id: target.id });
+            if (!result.ok) {
+              showToast(result.message || "Hapus gagal");
+              return;
+            }
+
+            log(
+              `<span class="log-op">hapusBuku()</span> <span class="log-info">free ${target.addr}</span>`,
+            );
+            applyState(result);
+            renderDetail(null);
+            showToast(result.message || "Buku dihapus");
+          });
+
+        render();
+      }
+
+      document.getElementById("btn-add").addEventListener("click", async () => {
+        const judul = document.getElementById("f-judul").value.trim();
+        const pengarang = document.getElementById("f-pengarang").value.trim();
+        const stok = parseInt(document.getElementById("f-stok").value, 10);
+
+        if (!judul || !pengarang || isNaN(stok) || stok < 0) {
+          showToast("Isi data buku dengan benar");
+          return;
+        }
+
+        const result = await apiRequest("add", { judul, pengarang, stok });
+        if (!result.ok) {
+          showToast(result.message || "Tambah gagal");
+          return;
+        }
+
+        applyState(result);
+        const newest = inventaris[inventaris.length - 1];
+        if (newest) {
+          log(
+            `<span class="log-op">tambahBuku()</span> <span class="log-info">allocated at ${newest.addr}</span>`,
+          );
+        }
+
+        document.getElementById("f-judul").value = "";
+        document.getElementById("f-pengarang").value = "";
+        showToast(result.message || "Buku ditambahkan");
+      });
+
+      document.getElementById("search").addEventListener("input", () => {
+        render();
+      });
+
+      document
+        .getElementById("book-list")
+        .addEventListener("click", (event) => {
+          const row = event.target.closest(".book-row");
+          if (!row) return;
+          const id = parseInt(row.dataset.id, 10);
+          if (!isNaN(id)) {
+            renderDetail(id);
+          }
+        });
+
+      (async function init() {
+        const initial = await apiRequest("list");
+        applyState(initial);
+        log(
+          '<span class="log-info">// inventaris[] initialized from PHP session</span>',
+        );
+      })();
+    </script>
+  </body>
+</html>
