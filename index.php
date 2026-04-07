@@ -3,7 +3,7 @@ require 'vendor/autoload.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
-$client = new MongoDB\Client("mongodb://localhost:27017");
+$client = new MongoDB\Client("mongodb+srv://syaad:<db_password>@projectstrukdat.ivd89po.mongodb.net/?appName=projectstrukdat");
 $collection = $client->book_inventary->inventaris;
 $addrBase = 0x8A00;
 
